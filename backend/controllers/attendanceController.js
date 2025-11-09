@@ -184,6 +184,12 @@ export const getTopPerformers = async (req, res) => {
       }
 
       if (record.checkIn && record.checkOut) {
+        // Ensure we have valid Date objects to compare
+        const checkInTime = record.checkIn.toDate ? record.checkIn.toDate() : new Date(record.checkIn);
+        const checkOutTime = record.checkOut.toDate ? record.checkOut.toDate() : new Date(record.checkOut);
+
+        const durationMs = checkOutTime - checkInTime
+        const standardWorkdayMs = 8 * 60 * 60 * 1000 // 8 hours
         if (durationMs > standardWorkdayMs) {
           const overtimeMs = durationMs - standardWorkdayMs
           stats[employeeId].overtimeHours += overtimeMs / (1000 * 60 * 60) // convert to hours

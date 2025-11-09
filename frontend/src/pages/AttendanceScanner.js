@@ -9,7 +9,7 @@ const OFFICE_LOCATION = {
   latitude: 13.332962,
   longitude: 103.974389,
 };
-const MAX_DISTANCE_METERS = 700; // 100-meter radius
+const MAX_DISTANCE_METERS = 100; // 100-meter radius
 
 // --- Helper function to calculate distance between two GPS coordinates ---
 function getDistance(lat1, lon1, lat2, lon2) {
