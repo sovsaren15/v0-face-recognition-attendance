@@ -8,7 +8,10 @@
     },
     {
       "src": "frontend/package.json",
-      "use": "@vercel/static-build"
+      "use": "@vercel/static-build",
+      "config": {
+        "buildCommand": "pnpm --prefix frontend run build"
+      }
     }
   ],
   "rewrites": [
