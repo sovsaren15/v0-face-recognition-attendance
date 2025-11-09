@@ -72,7 +72,7 @@ function EmployeeList() {
                 <td className="px-4 py-3 text-gray-600">{employee.email}</td>
                 <td className="px-4 py-3 text-gray-600">{employee.department}</td>
                 <td className="px-4 py-3 text-gray-600">
-                  {new Date(employee.registeredAt?.toDate?.() || employee.registeredAt).toLocaleDateString()}
+                  {employee.registeredAt ? new Date(employee.registeredAt).toLocaleDateString() : 'N/A'}
                 </td>
                 <td className="px-4 py-3 text-center">
                   <button

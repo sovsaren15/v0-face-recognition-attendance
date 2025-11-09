@@ -4,10 +4,34 @@ import admin from "firebase-admin"
 // Register new employee with face data
 export const registerEmployee = async (req, res) => {
   try {
-    const { name, email, department, faceDescriptor } = req.body
+    let { name, email, department, faceDescriptor, dob, startWorkingDate, sex } = req.body
 
-    if (!name || !email || !faceDescriptor) {
-      return res.status(400).json({ error: "Missing required fields" })
+    // Robustness: If faceDescriptor is an object from JSON serialization, convert it to an array.
+    if (faceDescriptor && typeof faceDescriptor === 'object' && !Array.isArray(faceDescriptor)) {
+      faceDescriptor = Object.values(faceDescriptor);
+    }
+
+    if (!name || !email || !faceDescriptor || !Array.isArray(faceDescriptor) || faceDescriptor.length === 0) {
+      return res.status(400).json({ error: "Missing required fields, including a valid face descriptor." })
+    }
+
+    // Validate date formats
+    const isValidDate = (dateString) => {
+      const date = new Date(dateString);
+      return date instanceof Date && !isNaN(date);
+    };
+
+    if (dob && !isValidDate(dob)) {
+      return res.status(400).json({ error: "Invalid date of birth format. Use YYYY-MM-DD" })
+    }
+
+    if (startWorkingDate && !isValidDate(startWorkingDate)) {
+      return res.status(400).json({ error: "Invalid start working date format. Use YYYY-MM-DD" })
+    }
+
+    // Validate sex field
+    if (sex && !['male', 'female', 'other'].includes(sex.toLowerCase())) {
+      return res.status(400).json({ error: "Sex must be 'male', 'female', or 'other'" })
     }
 
     // Check if employee exists
@@ -22,7 +46,10 @@ export const registerEmployee = async (req, res) => {
       name,
       email,
       department: department || "General",
-      faceDescriptor,
+      faceDescriptor: { ...faceDescriptor }, // Convert array to an object for Firestore
+      dob: dob || null,
+      startWorkingDate: startWorkingDate || admin.firestore.FieldValue.serverTimestamp(),
+      sex: sex ? sex.toLowerCase() : null,
       status: "active",
       registeredAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -43,10 +70,12 @@ export const registerEmployee = async (req, res) => {
 export const getAllEmployees = async (req, res) => {
   try {
     const snapshot = await db.collection("employees").where("status", "==", "active").get()
-    const employees = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }))
+    const employees = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      // Ensure timestamp is converted to a serializable format
+      const registeredAt = data.registeredAt?.toDate ? data.registeredAt.toDate().toISOString() : data.registeredAt;
+      return { id: doc.id, ...data, registeredAt };
+    });
 
     res.json({ success: true, employees })
   } catch (error) {
@@ -76,15 +105,37 @@ export const getEmployee = async (req, res) => {
 export const updateEmployee = async (req, res) => {
   try {
     const { id } = req.params
-    const { name, department, faceDescriptor } = req.body
+    const { name, department, faceDescriptor, dob, startWorkingDate, sex } = req.body
 
     const updateData = {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }
 
+    // Validate date formats if provided
+    const isValidDate = (dateString) => {
+      const date = new Date(dateString);
+      return date instanceof Date && !isNaN(date);
+    };
+
+    if (dob && !isValidDate(dob)) {
+      return res.status(400).json({ error: "Invalid date of birth format. Use YYYY-MM-DD" })
+    }
+
+    if (startWorkingDate && !isValidDate(startWorkingDate)) {
+      return res.status(400).json({ error: "Invalid start working date format. Use YYYY-MM-DD" })
+    }
+
+    // Validate sex field if provided
+    if (sex && !['male', 'female', 'other'].includes(sex.toLowerCase())) {
+      return res.status(400).json({ error: "Sex must be 'male', 'female', or 'other'" })
+    }
+
     if (name) updateData.name = name
     if (department) updateData.department = department
-    if (faceDescriptor) updateData.faceDescriptor = faceDescriptor
+    if (faceDescriptor) updateData.faceDescriptor = { ...faceDescriptor } // Convert to object for Firestore
+    if (dob) updateData.dob = dob
+    if (startWorkingDate) updateData.startWorkingDate = startWorkingDate
+    if (sex) updateData.sex = sex.toLowerCase()
 
     await db.collection("employees").doc(id).update(updateData)
 

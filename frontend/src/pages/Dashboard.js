@@ -21,7 +21,7 @@ function Dashboard() {
       ])
 
       if (attendanceRes.success) {
-        setTodayAttendance(attendanceRes.records)
+        setTodayAttendance(attendanceRes.attendance || [])
       }
 
       if (employeesRes.success) {
@@ -79,8 +79,10 @@ function Dashboard() {
             <thead>
               <tr className="border-b-2 border-gray-200">
                 <th className="px-4 py-3 text-left font-semibold text-gray-700">Employee</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-700">Time</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700">Check In</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700">Check Out</th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-700">Time Status</th>
               </tr>
             </thead>
             <tbody>
@@ -88,12 +90,32 @@ function Dashboard() {
                 <tr key={record.id} className="border-b border-gray-200 hover:bg-gray-50">
                   <td className="px-4 py-3 text-gray-800">{employeeMap[record.employeeId]?.name || "Unknown"}</td>
                   <td className="px-4 py-3 text-gray-600">
-                    {new Date(record.timestamp?.toDate?.() || record.timestamp).toLocaleTimeString()}
+                    {record.checkIn ? new Date(record.checkIn).toLocaleTimeString() : "N/A"}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {record.checkOut ? new Date(record.checkOut).toLocaleTimeString() : "Pending"}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
+                    <span
+                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                        record.status === "completed" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"
+                      }`}
+                    >
                       {record.status}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {record.timeStatus && (
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                          record.timeStatus === "Late"
+                            ? "bg-red-100 text-red-800"
+                            : record.timeStatus === "Good"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-yellow-100 text-yellow-800"
+                        }`}
+                      >{record.timeStatus}</span>
+                    )}
                   </td>
                 </tr>
               ))}

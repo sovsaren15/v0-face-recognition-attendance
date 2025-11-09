@@ -2,17 +2,20 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api
 
 // Attendance API calls
 export const attendanceAPI = {
-  markAttendance: async (employeeId, faceDescriptor, timestamp) => {
+  markAttendance: async (employeeId, type) => {
     const response = await fetch(`${API_BASE_URL}/attendance/mark`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         employeeId,
-        faceDescriptor: Array.from(faceDescriptor),
-        timestamp,
+        type, // 'check-in' or 'check-out'
       }),
     })
-    if (!response.ok) throw new Error("Failed to mark attendance")
+    if (!response.ok) {
+      const error = new Error("Failed to mark attendance");
+      error.response = response; // Attach response to the error
+      throw error;
+    }
     return response.json()
   },
 
@@ -41,22 +44,27 @@ export const attendanceAPI = {
     if (!response.ok) throw new Error("Failed to delete record")
     return response.json()
   },
+
+  getTopPerformers: async () => {
+    const response = await fetch(`${API_BASE_URL}/attendance/top-performers`, { method: "GET" })
+    if (!response.ok) throw new Error("Failed to fetch top performers")
+    return response.json()
+  }
 }
 
 // Employee API calls
 export const employeeAPI = {
-  register: async (name, email, department, faceDescriptor) => {
+  register: async (employeeData) => {
     const response = await fetch(`${API_BASE_URL}/employees/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        email,
-        department,
-        faceDescriptor: Array.from(faceDescriptor),
-      }),
+      body: JSON.stringify(employeeData),
     })
-    if (!response.ok) throw new Error("Failed to register employee")
+    if (!response.ok) {
+      const error = new Error("Failed to register employee")
+      error.response = response // Attach response to the error
+      throw error
+    }
     return response.json()
   },
 

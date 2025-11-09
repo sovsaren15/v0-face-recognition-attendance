@@ -4,13 +4,40 @@ import { useRef, useState, useEffect } from "react"
 import { loadFaceApiModels, detectFaces, compareFaces } from "../services/faceRecognition"
 import { employeeAPI, attendanceAPI } from "../services/api"
 
+// --- Location Configuration ---
+const OFFICE_LOCATION = {
+  latitude: 13.332962,
+  longitude: 103.974389,
+};
+const MAX_DISTANCE_METERS = 700; // 100-meter radius
+
+// --- Helper function to calculate distance between two GPS coordinates ---
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // in meters
+}
+
 function AttendanceScanner() {
   const videoRef = useRef(null)
-  const canvasRef = useRef(null)
+  const scanIntervalRef = useRef(null)
   const [scanning, setScanning] = useState(false)
+  const [scanType, setScanType] = useState(null) // 'check-in' or 'check-out'
   const [employees, setEmployees] = useState([])
   const [lastScanned, setLastScanned] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isCameraOpen, setIsCameraOpen] = useState(false)
+  const [isLocationValid, setIsLocationValid] = useState(false)
+  const [locationMessage, setLocationMessage] = useState("")
   const [message, setMessage] = useState("")
 
   useEffect(() => {
@@ -24,7 +51,6 @@ function AttendanceScanner() {
           setEmployees(response.employees)
         }
 
-        startCamera()
         setLoading(false)
       } catch (error) {
         console.error("Initialization error:", error)
@@ -36,9 +62,8 @@ function AttendanceScanner() {
     initializeScanner()
 
     return () => {
-      if (videoRef.current?.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach((track) => track.stop())
-      }
+      clearInterval(scanIntervalRef.current) // Clear interval on component unmount
+      stopCamera()
     }
   }, [])
 
@@ -49,6 +74,8 @@ function AttendanceScanner() {
       })
       if (videoRef.current) {
         videoRef.current.srcObject = stream
+        setIsCameraOpen(true)
+        checkLocation() // Check location when camera opens
       }
     } catch (error) {
       console.error("Camera access denied:", error)
@@ -56,57 +83,114 @@ function AttendanceScanner() {
     }
   }
 
-  const startScanning = () => {
-    setScanning(true)
-    setMessage("Scanning for face...")
-    scanForFace()
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach((track) => track.stop())
+      videoRef.current.srcObject = null
+      setIsCameraOpen(false)
+      setIsLocationValid(false)
+      setLocationMessage("")
+      setScanning(false) // Stop scanning if camera is closed
+    }
   }
 
-  const scanForFace = async () => {
-    if (!scanning || !videoRef.current) return
-
-    try {
-      const detections = await detectFaces(videoRef.current)
-
-      if (detections.length > 0) {
-        const detection = detections[0]
-        const faceDescriptor = detection.descriptor
-
-        let matchedEmployee = null
-        for (const employee of employees) {
-          const empDescriptor = new Float32Array(employee.faceDescriptor)
-          if (compareFaces(faceDescriptor, empDescriptor, 0.55)) {
-            matchedEmployee = employee
-            break
-          }
-        }
-
-        if (matchedEmployee) {
-          try {
-            await attendanceAPI.markAttendance(matchedEmployee.id, faceDescriptor, new Date().toISOString())
-            setLastScanned({
-              name: matchedEmployee.name,
-              time: new Date().toLocaleTimeString(),
-            })
-            setMessage(`Welcome, ${matchedEmployee.name}!`)
-            setScanning(false)
-            setTimeout(() => setMessage(""), 3000)
-          } catch (error) {
-            console.error("Error marking attendance:", error)
-            setMessage("Error marking attendance")
-          }
-        } else {
-          setMessage("Face not recognized")
-        }
-
-        setScanning(false)
-      } else {
-        requestAnimationFrame(scanForFace)
-      }
-    } catch (error) {
-      console.error("Error scanning:", error)
-      setScanning(false)
+  const checkLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationMessage("Geolocation is not supported by your browser.")
+      setIsLocationValid(false)
+      return
     }
+
+    setLocationMessage("Checking your location...")
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords
+        const distance = getDistance(latitude, longitude, OFFICE_LOCATION.latitude, OFFICE_LOCATION.longitude)
+
+        if (distance <= MAX_DISTANCE_METERS) {
+          setLocationMessage("Location verified. You can now check in/out.")
+          setIsLocationValid(true)
+        } else {
+          setLocationMessage(`You are too far from the office. Distance: ${distance.toFixed(0)} meters.`)
+          setIsLocationValid(false)
+        }
+      },
+      () => {
+        setLocationMessage("Unable to retrieve your location. Please enable location services.")
+        setIsLocationValid(false)
+      }
+    )
+  }
+
+  const startScanning = (type) => {
+    if (!isLocationValid) {
+      setMessage("Cannot scan: You are not at the required location.");
+      return;
+    }
+    setScanType(type)
+    setScanning(true)
+    setMessage(`Scanning for ${type}...`);
+
+    const scan = async () => {
+      if (!videoRef.current) return;
+
+      try {
+        const detections = await detectFaces(videoRef.current);
+
+        if (detections.length > 0) {
+          // Stop scanning once a face is detected
+          clearInterval(scanIntervalRef.current);
+          setScanning(false);
+
+          const detection = detections[0];
+          const faceDescriptor = detection.descriptor;
+
+          let matchedEmployee = null;
+          for (const employee of employees) {
+            if (!employee.faceDescriptor || typeof employee.faceDescriptor !== 'object') continue;
+            const descriptorValues = Object.values(employee.faceDescriptor);
+            const empDescriptor = new Float32Array(descriptorValues);
+
+            if (compareFaces(faceDescriptor, empDescriptor, 0.55)) {
+              matchedEmployee = employee;
+              break;
+            }
+          }
+
+          if (matchedEmployee) {
+            try {
+              const response = await attendanceAPI.markAttendance(matchedEmployee.id, type);
+              setLastScanned({
+                name: matchedEmployee.name,
+                time: new Date().toLocaleTimeString(),
+                type: type,
+              });
+              setMessage(`${type === 'check-in' ? 'Welcome' : 'Goodbye'}, ${matchedEmployee.name}! ${response.message}`);
+              setTimeout(() => setMessage(""), 3000);
+            } catch (error) {
+              console.error("Error marking attendance:", error);
+              if (error.response) {
+                const errorData = await error.response.json();
+                setMessage(errorData.error || "Error marking attendance");
+              } else {
+                setMessage("Error marking attendance");
+              }
+            }
+          } else {
+            setMessage("Face not recognized. Please try again.");
+          }
+        } else if (scanning) { // Only continue scanning if no face was found and we are still in scanning mode
+          requestAnimationFrame(scan);
+        }
+      } catch (error) {
+        console.error("Error during scan:", error);
+        setMessage("An error occurred during scanning.");
+        clearInterval(scanIntervalRef.current);
+        setScanning(false);
+      }
+    };
+
+    scan(); // Start the scan loop
   }
 
   if (loading) {
@@ -129,18 +213,54 @@ function AttendanceScanner() {
         <div className="flex flex-col gap-4">
           <div className="bg-black rounded-lg overflow-hidden relative">
             <video ref={videoRef} autoPlay playsInline className="w-full h-80 object-cover" />
-            <canvas ref={canvasRef} className="absolute top-0 left-0" style={{ display: "none" }} />
           </div>
 
-          <button
-            onClick={startScanning}
-            disabled={scanning}
-            className={`w-full py-3 px-6 rounded-lg font-semibold text-white transition ${
-              scanning ? "bg-gray-400 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
-            }`}
-          >
-            {scanning ? "Scanning..." : "Scan Face"}
-          </button>
+          {locationMessage && (
+            <div
+              className={`p-3 rounded-lg text-white text-center font-semibold text-sm ${
+                isLocationValid ? "bg-green-500" : "bg-red-500"
+              }`}
+            >
+              {locationMessage}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4 items-center">
+            {!isCameraOpen ? (
+              <button
+                onClick={startCamera}
+                className="w-full col-span-2 py-3 px-6 rounded-lg font-semibold text-white transition bg-blue-600 hover:bg-blue-700"
+              >
+                Open Camera
+              </button>
+            ) : (
+              <button
+                onClick={stopCamera}
+                className="w-full col-span-2 py-3 px-6 rounded-lg font-semibold text-white transition bg-gray-600 hover:bg-gray-700"
+              >
+                Close Camera
+              </button>
+            )}
+
+            <button
+              onClick={() => startScanning("check-in")}
+              disabled={scanning || !isCameraOpen || !isLocationValid}
+              className={`w-full py-3 px-6 rounded-lg font-semibold text-white transition ${
+                scanning || !isCameraOpen || !isLocationValid ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
+              }`}
+            >
+              {scanning && scanType === 'check-in' ? "Scanning..." : "Check In"}
+            </button>
+            <button
+              onClick={() => startScanning("check-out")}
+              disabled={scanning || !isCameraOpen || !isLocationValid}
+              className={`w-full py-3 px-6 rounded-lg font-semibold text-white transition ${
+                scanning || !isCameraOpen || !isLocationValid ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"
+              }`}
+            >
+              {scanning && scanType === 'check-out' ? "Scanning..." : "Check Out"}
+            </button>
+          </div>
 
           {message && (
             <div
@@ -164,6 +284,9 @@ function AttendanceScanner() {
                 </p>
                 <p className="text-lg text-gray-700">
                   <span className="font-semibold">Time:</span> {lastScanned.time}
+                </p>
+                <p className="text-lg text-gray-700">
+                  <span className="font-semibold">Action:</span> <span className="capitalize">{lastScanned.type}</span>
                 </p>
               </div>
             ) : (
