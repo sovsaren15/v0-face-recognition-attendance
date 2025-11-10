@@ -15,7 +15,11 @@
       "use": "@vercel/static-build",
       "config": {
         "buildCommand": "pnpm install --prefix frontend && pnpm --prefix frontend run build",
-        "outputDirectory": "frontend/build"
+        "outputDirectory": "frontend/build",
+        "engines": {
+          "node": "22.x",
+          "pnpm": "8.6.1"
+        }
       }
     }
   ],
