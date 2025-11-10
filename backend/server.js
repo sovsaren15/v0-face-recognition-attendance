@@ -3,6 +3,7 @@ import cors from "cors"
 import dotenv from "dotenv"
 import attendanceRoutes from "./routes/attendance.js"
 import employeeRoutes from "./routes/employees.js"
+import uploadRoutes from "./routes/uploads.js"
 
 dotenv.config()
 
@@ -16,6 +17,7 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }))
 // Routes
 app.use("/api/attendance", attendanceRoutes)
 app.use("/api/employees", employeeRoutes)
+app.use("/api/uploads", uploadRoutes)
 
 // Health check
 app.get("/api/health", (req, res) => {
