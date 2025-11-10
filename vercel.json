@@ -18,23 +18,17 @@
   ],
   "routes": [
     {
-      "src": "/api/.*",
-      "dest": "backend/server.js"
-    }
-  ],
-  "functions": {
-    "backend/server.js": {
-      "maxDuration": 300
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/api/(.*)", 
+      "source": "/api/(.*)",
       "destination": "backend/server.js"
     },
     {
       "source": "/((?!api/|favicon.ico|logo192.png|manifest.json).*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "backend/server.js": {
+      "maxDuration": 300
+    }
+  }
 }
