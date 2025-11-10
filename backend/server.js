@@ -24,5 +24,13 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Server is running" })
 })
 
+// Global error handler - MUST be the last middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack)
+  const statusCode = err.status || 500
+  const message = err.message || "Internal Server Error"
+  res.status(statusCode).json({ error: { message, status: statusCode } })
+})
+
 // Export the app for Vercel
 export default app
