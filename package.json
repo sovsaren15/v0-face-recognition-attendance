@@ -6,7 +6,8 @@
     "start:backend": "node backend/server.js",
     "install:frontend": "pnpm --prefix frontend install",
     "install:backend": "pnpm --prefix backend install",
-    "vercel-build": "pnpm --prefix frontend build"
+    "vercel-build": "pnpm --prefix frontend build",
+    "build": "pnpm --prefix frontend build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
