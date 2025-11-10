@@ -9,7 +9,7 @@
       "src": "frontend/package.json", 
       "use": "@vercel/static-build",
       "config": {
-        "buildCommand": "pnpm --filter smart-attendance-frontend run build",
+        "buildCommand": "pnpm install --prefix frontend && pnpm --prefix frontend run build",
         "outputDirectory": "frontend/build"
       }
     }
@@ -19,9 +19,6 @@
       "source": "/api/(.*)",
       "destination": "backend/server.js"
     },
-    {
-      "source": "/((?!api/|.*\\..*).*)",
-      "destination": "index.html"
-    }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

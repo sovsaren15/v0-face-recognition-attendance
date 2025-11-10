@@ -1,13 +1,17 @@
 {
   "name": "my-v0-project",
   "version": "0.1.0",
+  "packageManager": "pnpm@8.6.1",
+  "engines": {
+    "node": "18.x"
+  },
   "private": true,
   "scripts": {
     "start:backend": "node backend/server.js",
     "install:frontend": "pnpm --prefix frontend install",
     "install:backend": "pnpm --prefix backend install",
     "vercel-build": "pnpm --prefix frontend build",
-    "build": "pnpm --prefix frontend build"
+    "build:frontend": "pnpm --prefix frontend build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
